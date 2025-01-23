@@ -4,40 +4,47 @@ chrome.runtime.onInstalled.addListener(() => {
     });
     console.log("Page de bienvenue ouverte pour demander l'accès au microphone.");
 });
-
-  
-// Fonction pour écouter les messages provenant du popup ou de l'extension
+// Fonction pour écouter les messages provenant du popup ou d'autres parties de l'extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.command === "search") {
-      // Envoyer le texte au content script
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            console.log("j'ai reçu la requête bb");
+        chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
             if (tabs[0]?.id) {
+                const tabId = tabs[0].id;
+
+                // Vérifiez si le fichier content.js est déjà injecté
                 chrome.scripting.executeScript({
-                    target: { tabId: tabs[0].id },
-                    func: performSearch,
-                    args: [message.query]
+                    target: { tabId: tabId },
+                    files: ["content.js"]
+                }, (injectionResults) => {
+                    if (chrome.runtime.lastError) {
+                        console.error("Erreur lors de l'injection du script :", chrome.runtime.lastError.message);
+                        sendResponse({ status: "Erreur d'injection" });
+                        return;
+                    }
+
+                    console.log("Script content.js injecté avec succès.");
+
+                    // Envoyer le message au content script après l'injection
+                    chrome.tabs.sendMessage(tabId, {
+                        command: "performSearch",
+                        query: message.query,
+                    }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            console.error("Erreur lors de l'envoi du message :", chrome.runtime.lastError.message);
+                        } else {
+                            console.log("Réponse reçue du content script :", response);
+                        }
+                    });
+
+                    sendResponse({ status: "Message envoyé au content script." });
                 });
+            } else {
+                console.error("Aucun onglet actif trouvé.");
+                sendResponse({ status: "Aucun onglet actif trouvé." });
             }
         });
-      sendResponse({ status: "Recherche envoyée" });
+
+        // Indique que la réponse est asynchrone
+        return true;
     }
-  });
-  
-// Fonction injectée dans le content.js
-function performSearch(query) {
-    const searchInput = document.getElementById("launcher");
-    if (searchInput) {
-        searchInput.value = query;
-        const event = new KeyboardEvent("keydown", {
-            bubbles: true,
-            cancelable: true,
-            key: "Enter",
-            keyCode: 13
-        });
-        searchInput.dispatchEvent(event);
-    } else {
-        console.error("Champ de recherche introuvable.");
-    }
-}
-  
+});

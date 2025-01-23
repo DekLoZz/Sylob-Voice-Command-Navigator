@@ -3,7 +3,7 @@
     "name": "Voice Search Extension",
     "version": "1.0",
     "description": "An extension to perform voice search.",
-    "permissions": ["activeTab", "scripting"],
+    "permissions": ["activeTab", "scripting", "tabs"],
     "background": {
       "service_worker": "background.js"
     },

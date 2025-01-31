@@ -11,40 +11,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (tabs[0]?.id) {
                 const tabId = tabs[0].id;
 
-                // Vérifiez si le fichier content.js est déjà injecté
-                chrome.scripting.executeScript({
-                    target: { tabId: tabId },
-                    files: ["content.js"]
-                }, (injectionResults) => {
-                    if (chrome.runtime.lastError) {
-                        console.error("Erreur lors de l'injection du script :", chrome.runtime.lastError.message);
-                        sendResponse({ status: "Erreur d'injection" });
-                        return;
+                // Vérifiez si content.js est déjà injecté
+                chrome.tabs.sendMessage(tabId, { command: "checkInjected" }, (response) => {
+                    if (chrome.runtime.lastError || !response) {
+                        // Injectez content.js si non injecté
+                        chrome.scripting.executeScript({
+                            target: { tabId: tabId },
+                            files: ["content.js"]
+                        }, () => {
+                            if (chrome.runtime.lastError) {
+                                console.error("Erreur lors de l'injection :", chrome.runtime.lastError.message);
+                                sendResponse({ status: "Erreur d'injection" });
+                                return;
+                            }
+
+                            console.log("Script content.js injecté.");
+                            // Envoyer le message après l'injection
+                            chrome.tabs.sendMessage(tabId, {
+                                command: "performSearch",
+                                query: message.query,
+                            });
+                        });
+                    } else {
+                        // Si déjà injecté, envoyer directement le message
+                        chrome.tabs.sendMessage(tabId, {
+                            command: "performSearch",
+                            query: message.query,
+                        });
                     }
-
-                    console.log("Script content.js injecté avec succès.");
-
-                    // Envoyer le message au content script après l'injection
-                    chrome.tabs.sendMessage(tabId, {
-                        command: "performSearch",
-                        query: message.query,
-                    }, (response) => {
-                        if (chrome.runtime.lastError) {
-                            console.error("Erreur lors de l'envoi du message :", chrome.runtime.lastError.message);
-                        } else {
-                            console.log("Réponse reçue du content script :", response);
-                        }
-                    });
-
-                    sendResponse({ status: "Message envoyé au content script." });
                 });
+
+                sendResponse({ status: "Message traité." });
             } else {
                 console.error("Aucun onglet actif trouvé.");
                 sendResponse({ status: "Aucun onglet actif trouvé." });
             }
         });
 
-        // Indique que la réponse est asynchrone
         return true;
     }
 });
